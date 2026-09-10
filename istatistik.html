@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cepheid Scans - Sözlük İstatistik</title>
+    <link rel="icon" type="image/png" href="https://i.ibb.co/MDDG50d0/cepheidyenix100.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1a1a24;
+            --panel-bg: #2b2b36;
+            --text-color: #f5f5f5;
+            --accent-color: #4da6ff;
+            --border-color: #3f3f4e;
+            --success-color: #5dca82;
+            --gold-color: #ffd700;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            flex-direction: column; 
+            min-height: 100vh; 
+            padding-top: 70px;
+        }
+
+        /* NAVBAR */
+        .navbar {
+            background-color: var(--panel-bg);
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+        }
+        .logo-container img { height: 40px; cursor: pointer; }
+        .nav-links a {
+            color: var(--text-color);
+            text-decoration: none;
+            margin-left: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            transition: color 0.3s;
+        }
+        .nav-links a:hover, .nav-links a.active { color: var(--accent-color); }
+
+        /* SAYFA DÜZENİ */
+        .page-wrapper {
+            flex-grow: 1; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 30px 20px;
+        }
+
+        .header-container { text-align: center; margin-bottom: 25px; width: 100%; max-width: 1100px; }
+        h1 { color: var(--accent-color); border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; display: inline-block; margin-top: 0; }
+
+        .stats-container {
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        /* ÖZET METRİK KARTLARI */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+        }
+        .stat-card {
+            background-color: var(--panel-bg);
+            padding: 22px 18px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .stat-card .value {
+            font-size: 2.2em;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin: 8px 0 4px 0;
+        }
+        .stat-card .label {
+            font-size: 0.85em;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .stat-card .sub {
+            font-size: 0.8em;
+            color: #777;
+            margin-top: 4px;
+        }
+
+        /* DETAY PANELLERİ */
+        .details-panel {
+            background-color: var(--panel-bg);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+        }
+        .details-panel h2 {
+            margin-top: 0;
+            color: var(--accent-color);
+            font-size: 1.25em;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .details-panel h2 span {
+            font-size: 0.7em;
+            color: #888;
+            font-weight: normal;
+        }
+
+        /* SIRALI KANA ÇUBUKLARI */
+        .kana-bar-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+        .kana-rank {
+            width: 25px;
+            font-weight: bold;
+            color: #666;
+            text-align: right;
+            font-size: 0.85em;
+        }
+        .kana-rank.top3 {
+            color: var(--gold-color);
+        }
+        .kana-label {
+            width: 75px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+        .kana-label span:last-child {
+            color: #888;
+            font-weight: normal;
+        }
+        .bar-wrapper {
+            flex-grow: 1;
+            background-color: #1a1a24;
+            height: 14px;
+            border-radius: 7px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4da6ff, #5dca82);
+            border-radius: 7px;
+            width: 0%;
+            transition: width 0.8s ease-in-out;
+        }
+        .kana-count {
+            width: 90px;
+            text-align: right;
+            color: #ccc;
+            font-weight: bold;
+        }
+
+        /* TABLOLU DETAYLAR (ZENGİN SFX'LER) */
+        .mini-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .mini-table th, .mini-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em;
+        }
+        .mini-table th {
+            color: var(--accent-color);
+            font-weight: bold;
+            background: #22222e;
+        }
+        .mini-table tr:hover {
+            background-color: #32323f;
+        }
+
+        .loading { text-align: center; padding: 50px; font-size: 1.2em; color: var(--accent-color); }
+
+        footer {
+            background-color: var(--panel-bg);
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+            color: #888;
+            border-top: 1px solid var(--border-color);
+            margin-top: 40px;
+        }
+        footer a { color: var(--accent-color); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .navbar { flex-direction: column; gap: 15px; }
+            .nav-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; }
+            .nav-links a { margin: 0; }
+            .kana-label { width: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="logo-container">
+        <a href="index.html"><img src="https://i.ibb.co/6cbW29tV/cepheidozluk.png" alt="Cepheid Scans Logo"></a>
+    </div>
+    <div class="nav-links">
+        <a href="index.html">Sözlük</a>
+        <a href="istatistik.html" class="active">İstatistikler</a>
+        <a href="https://discord.gg/uVqCHzkxYq">Discord</a>
+        <a href="https://cepheidscans.blogspot.com">Sitemiz</a>
+        <a href="credits.html">Emeği Geçenler</a>
+    </div>
+</nav>
+
+<div class="page-wrapper">
+    <div class="header-container">
+        <h1>Cepheid Sözlük İstatistikleri</h1>
+    </div>
+
+    <div class="stats-container" id="statsContent">
+        <div class="loading">Veritabanı taranıyor...</div>
+    </div>
+</div>
+
+<footer>
+    <p>&copy; 2026 Cepheid Scans. Tüm hakları saklıdır.</p>
+    <p>Geliştirici: Tuğra | <a href="https://discord.gg/uVqCHzkxYq">Discord Sunucumuz</a></p>
+</footer>
+
+<script>
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvI9TzWNvNo1xMHE1t8lmeY8Ma6gsVxA0pftYke_tw7nOykjkQLypp1AjOl2iaN000i2dpvquzgRhX/pub?gid=0&single=true&output=csv";
+
+    const katakanaMap = [
+        { k:"ア", r:"a" }, { k:"イ", r:"i" }, { k:"ウ", r:"u" }, { k:"エ", r:"e" }, { k:"オ", r:"o" },
+        { k:"カ", r:"ka" }, { k:"キ", r:"ki" }, { k:"ク", r:"ku" }, { k:"ケ", r:"ke" }, { k:"コ", r:"ko" },
+        { k:"サ", r:"sa" }, { k:"シ", r:"shi" }, { k:"ス", r:"su" }, { k:"セ", r:"se" }, { k:"ソ", r:"so" },
+        { k:"タ", r:"ta" }, { k:"チ", r:"chi" }, { k:"ツ", r:"tsu" }, { k:"テ", r:"te" }, { k:"ト", r:"to" },
+        { k:"ナ", r:"na" }, { k:"ニ", r:"ni" }, { k:"ヌ", r:"nu" }, { k:"ネ", r:"ne" }, { k:"ノ", r:"no" },
+        { k:"ハ", r:"ha" }, { k:"ヒ", r:"hi" }, { k:"フ", r:"fu" }, { k:"ヘ", r:"he" }, { k:"ホ", r:"ho" },
+        { k:"マ", r:"ma" }, { k:"ミ", r:"mi" }, { k:"ム", r:"mu" }, { k:"メ", r:"me" }, { k:"モ", r:"mo" },
+        { k:"ヤ", r:"ya" }, { k:"ユ", r:"yu" }, { k:"ヨ", r:"yo" },
+        { k:"ラ", r:"ra" }, { k:"リ", r:"ri" }, { k:"ル", r:"ru" }, { k:"レ", r:"re" }, { k:"ロ", r:"ro" },
+        { k:"ワ", r:"wa" }, { k:"ヲ", r:"wo" }, { k:"ン", r:"n" }
+    ];
+
+    function getCleanFirstChar(str) {
+        if (!str) return '';
+        let char = str.trim().charAt(0);
+        return char.normalize('NFD').charAt(0);
+    }
+
+    Papa.parse(csvUrl, {
+        download: true,
+        header: false,
+        complete: function(results) {
+            let rows = results.data;
+            rows.shift();
+
+            const allData = rows.map((row, index) => ({
+                id: index,
+                japanese: row[0] ? row[0].trim() : '',
+                romaji: row[1] ? row[1].trim() : '',
+                turkish: row[2] ? row[2].trim() : '',
+                explanation: row[3] ? row[3].trim() : '',
+                example: row[4] ? row[4].trim() : '',
+                updateDate: row[5] ? row[5].trim() : ''
+            })).filter(item => item.romaji !== '' || item.japanese !== '');
+
+            renderDetailedStats(allData);
+        }
+    });
+
+    function renderDetailedStats(data) {
+        const totalWords = data.length;
+        const wordsWithExamples = data.filter(item => item.example !== '').length;
+        const exampleRate = ((wordsWithExamples / totalWords) * 100).toFixed(1);
+
+        // 1. Kanalara Göre Sayım
+        const kanaMapLookup = {};
+        katakanaMap.forEach(item => {
+            kanaMapLookup[item.k] = { ...item, count: 0 };
+        });
+
+        data.forEach(item => {
+            const firstChar = getCleanFirstChar(item.japanese);
+            if (kanaMapLookup[firstChar]) {
+                kanaMapLookup[firstChar].count++;
+            }
+        });
+
+        // EN ÇOKTAN EN AZA DOĞRU SIRALAMA
+        const sortedKanas = Object.values(kanaMapLookup).sort((a, b) => b.count - a.count);
+        const maxCount = sortedKanas[0].count || 1;
+        const activeKanasCount = sortedKanas.filter(k => k.count > 0).length;
+
+        // 2. En Çok Anlama Sahip Çok Yönlü SFX'ler (Metinde geçen (1), (2), (3) vb. sayımı)
+        const versatileSFX = data.map(item => {
+            const matches = item.turkish.match(/\(\d+\)/g);
+            const count = matches ? matches.length : 1;
+            return { ...item, meaningCount: count };
+        }).sort((a, b) => b.meaningCount - a.meaningCount).slice(0, 5);
+
+        // 3. Güncelleme Geçmişi (Aylara Göre Dağılım)
+        const monthlyUpdates = {};
+        data.forEach(item => {
+            if (!item.updateDate) return;
+            const parts = item.updateDate.replace(/[\/\-]/g, '.').split('.');
+            if (parts.length >= 2) {
+                const month = parts[1].padStart(2, '0');
+                const year = parts[2] ? parts[2].trim() : '2026';
+                const key = `${month}.${year}`;
+                monthlyUpdates[key] = (monthlyUpdates[key] || 0) + 1;
+            }
+        });
+
+        // Arayüz Çıktısı
+        const container = document.getElementById('statsContent');
+        container.innerHTML = `
+            <!-- GENEL METRİKLER -->
+            <div class="cards-grid">
+                <div class="stat-card">
+                    <div class="label">Toplam SFX</div>
+                    <div class="value">${totalWords}</div>
+                    <div class="sub">Kayıtlı veri sayısı</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Görsel / Örnekli</div>
+                    <div class="value" style="color: var(--success-color);">${wordsWithExamples}</div>
+                    <div class="sub">%${exampleRate} görsel kapsama</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Lider Kategori</div>
+                    <div class="value" style="color: var(--gold-color);">${sortedKanas[0].k} <span style="font-size: 0.55em; color: #aaa;">(${sortedKanas[0].r})</span></div>
+                    <div class="sub">${sortedKanas[0].count} kelime barındırıyor</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Dolu Kategori Oranı</div>
+                    <div class="value">${activeKanasCount} / ${katakanaMap.length}</div>
+                    <div class="sub">%${((activeKanasCount / katakanaMap.length) * 100).toFixed(0)} kana aktif</div>
+                </div>
+            </div>
+
+            <!-- SIRALI KANALAR (EN ÇOKTAN EN AZA) -->
+            <div class="details-panel">
+                <h2>
+                    Kanalara Göre Dağılım Sıralaması
+                    <span>En çok kelimeden en aza doğru</span>
+                </h2>
+                <div id="sortedBarsList"></div>
+            </div>
+
+            <!-- ÇOK YÖNLÜ SFX'LER VE GÜNCELLEME TRENLERİ -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+                <div class="details-panel">
+                    <h2>En Zengin (Çok Anlamlı) SFX'ler</h2>
+                    <table class="mini-table">
+                        <thead>
+                            <tr>
+                                <th>Japonca</th>
+                                <th>Romaji</th>
+                                <th>Anlam Çeşitliliği</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${versatileSFX.map(sfx => `
+                                <tr>
+                                    <td style="font-weight:bold; color:#fff;">${sfx.japanese}</td>
+                                    <td style="color:#aaa;">${sfx.romaji}</td>
+                                    <td><span style="color:var(--accent-color); font-weight:bold;">${sfx.meaningCount}</span> farklı anlam</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="details-panel">
+                    <h2>Aylık Veri Girişi Dağılımı</h2>
+                    <table class="mini-table">
+                        <thead>
+                            <tr>
+                                <th>Dönem (Ay.Yıl)</th>
+                                <th>Eklenen SFX</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.keys(monthlyUpdates).length > 0 ? 
+                                Object.keys(monthlyUpdates).sort().reverse().slice(0, 5).map(period => `
+                                    <tr>
+                                        <td style="color:#fff; font-weight:bold;">${period}</td>
+                                        <td><span style="color:var(--success-color); font-weight:bold;">+${monthlyUpdates[period]}</span> yeni kayıt</td>
+                                    </tr>
+                                `).join('') 
+                                : '<tr><td colspan="2" style="color:#777; text-align:center;">Tarih verisi bulunamadı</td></tr>'
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        // Çubukları Doldur (Animasyonlu)
+        const barsContainer = document.getElementById('sortedBarsList');
+        sortedKanas.forEach((item, index) => {
+            const count = item.count;
+            const percentage = ((count / maxCount) * 100).toFixed(1);
+            const globalPercent = totalWords > 0 ? ((count / totalWords) * 100).toFixed(1) : 0;
+            const rankClass = index < 3 ? 'kana-rank top3' : 'kana-rank';
+
+            const row = document.createElement('div');
+            row.className = 'kana-bar-item';
+            row.innerHTML = `
+                <div class="${rankClass}">#${index + 1}</div>
+                <div class="kana-label">
+                    <span>${item.k}</span>
+                    <span>${item.r}</span>
+                </div>
+                <div class="bar-wrapper">
+                    <div class="bar-fill" style="width: ${percentage}%;"></div>
+                </div>
+                <div class="kana-count">${count} <span style="font-size:0.75em; color:#777;">(%${globalPercent})</span></div>
+            `;
+            barsContainer.appendChild(row);
+        });
+    }
+</script>
+</body>
+</html>
